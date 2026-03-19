@@ -1,3 +1,5 @@
 *.tar.gz
 *.tar
 *.stamp
+*.bin
+wi_authentication_key

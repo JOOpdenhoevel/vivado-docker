@@ -7,10 +7,8 @@
 FROM ubuntu:22.04
 
 ARG INSTALL_TARGET_DIR
-ARG XSETUP_DIR
 ARG HOST_TOOL_ARCHIVE_NAME
 ARG VIVADO_VERSION
-ARG HOST_TOOL_ARCHIVE_EXTENSION
 
 ENV XILINX_INSTALL_LOCATION=$INSTALL_TARGET_DIR
 ENV DEBIAN_FRONTEND=noninteractive
@@ -78,29 +76,25 @@ RUN apt-get update && apt-get install -y \
 RUN env LANG=en_US.UTF-8 locale-gen --purge en_US.UTF-8 \
 	&& echo -e 'LANG="en_US.UTF-8"\nLANGUAGE="en_US:en"\n' > /etc/default/locale
 
-RUN mkdir -p $XILINX_INSTALL_LOCATION/tmp
-
 # Copy only the small config file (not the ~96 GB archive!)
 COPY install_config.txt /tmp/install_config.txt
+COPY wi_authentication_key /root/.Xilinx/wi_authentication_key
 
 # Extract archive and install Vivado in a SINGLE layer using bind mount.
 # The archive is mounted read-only from the build context — never copied
 # into an image layer. Extraction + install + cleanup happen atomically,
 # so only the final installed files persist.
 # Credit: This bind-mount optimization was contributed by @gretel in PR #5.
-RUN --mount=type=bind,source=${HOST_TOOL_ARCHIVE_NAME},target=/tmp/archive.tar \
+RUN --mount=type=bind,source=${HOST_TOOL_ARCHIVE_NAME},target=/tmp/installer.bin \
     mkdir -p /tmp/vivado-extract \
-    && echo "Extracting archive (this takes a while)..." \
-    && tar -xf /tmp/archive.tar -C /tmp/vivado-extract \
-    && echo "Running xsetup batch install..." \
-    && cd /tmp/vivado-extract/$(ls /tmp/vivado-extract) \
-    && ./xsetup \
+    && cd /tmp/vivado-extract/ \
+    && /tmp/installer.bin -- \
         --config /tmp/install_config.txt \
         --batch Install \
-        --location /opt/Xilinx \
+        --location $XILINX_INSTALL_LOCATION \
         --agree XilinxEULA,3rdPartyEULA \
     && echo "Cleaning up extracted archive..." \
-    && rm -rf /tmp/vivado-extract /tmp/install_config.txt
+    && cd && rm -rf /tmp/vivado-extract /tmp/install_config.txt /root/.Xilinx/wi_authentication_key
 
 VOLUME /src
 VOLUME /work
